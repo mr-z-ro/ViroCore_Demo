@@ -1,19 +1,29 @@
 package com.example.virosample;
 
+import android.Manifest;
 import android.app.Activity;
+import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.viro.core.ARAnchor;
 import com.viro.core.ARImageTarget;
 import com.viro.core.ARNode;
 import com.viro.core.ARScene;
+import com.viro.core.AnimationTimingFunction;
+import com.viro.core.AnimationTransaction;
 import com.viro.core.AsyncObject3DListener;
+import com.viro.core.ClickListener;
+import com.viro.core.ClickState;
 import com.viro.core.Material;
 import com.viro.core.Node;
 
@@ -23,6 +33,7 @@ import com.viro.core.Spotlight;
 import com.viro.core.Surface;
 import com.viro.core.Texture;
 import com.viro.core.Vector;
+import com.viro.core.ViroMediaRecorder;
 import com.viro.core.ViroView;
 import com.viro.core.ViroViewARCore;
 
@@ -39,6 +50,7 @@ public class ViroActivityAR extends Activity {
     private ARImageTarget mImageTarget;
     private Node mGebNode;
     private Object3D mGebModel;
+    private boolean isRecording = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -152,7 +164,56 @@ public class ViroActivityAR extends Activity {
 
         mGebModel.setVisible(false);
         node.addChildNode(mGebModel);
+
+        node.setClickListener(new ClickListener() {
+
+            @Override
+            public void onClick(int i, Node node, Vector vector) {
+                if (!hasAudioAndRecordingPermissions(getBaseContext())){
+                    requestPermissions();
+                    return;
+                }
+                //toggleRecording();
+                AnimationTransaction.begin();
+                AnimationTransaction.setAnimationDuration(2000);
+                AnimationTransaction.setTimingFunction(AnimationTimingFunction.EaseInEaseOut);
+                Vector currentRotation = node.getRotationEulerRealtime();
+                node.setRotation(new Vector(currentRotation.x, currentRotation.y + Math.PI, currentRotation.z));
+                AnimationTransaction.commit();
+            }
+
+            @Override
+            public void onClickState(int i, Node node, ClickState clickState, Vector vector) {
+
+            }
+        });
+
         return node;
+    }
+
+    private void toggleRecording() {
+        if (!isRecording) {
+            mViroView.getRecorder().startRecordingAsync("virotest", true, new ViroMediaRecorder.RecordingErrorListener() {
+                @Override
+                public void onRecordingFailed(ViroMediaRecorder.Error error) {
+                    Log.e(TAG, error.toString());
+                }
+            });
+            isRecording = true;
+        } else {
+            mViroView.getRecorder().stopRecordingAsync(new ViroMediaRecorder.VideoRecordingFinishListener() {
+                @Override
+                public void onSuccess(String s) {
+                    Log.i(TAG, "File recorded to: " + s);
+                }
+
+                @Override
+                public void onError(ViroMediaRecorder.Error error) {
+                    Log.e(TAG, error.toString());
+                }
+            });
+            isRecording = false;
+        }
     }
 
     private Node initLightingNode() {
@@ -187,7 +248,7 @@ public class ViroActivityAR extends Activity {
         spotLight.setOuterAngle(20);
         spotLight.setCastsShadow(true);
         lightingNode.addLight(spotLight);
-        
+
         // Add shadow planes: these are "invisible" surfaces on which virtual shadows will be cast,
         // simulating real-world shadows
         final Material material = new Material();
@@ -266,6 +327,29 @@ public class ViroActivityAR extends Activity {
         @Override
         public void onAnchorRemoved(ARAnchor anchor, ARNode arNode) {
             // no-op
+        }
+    }
+
+    private void requestPermissions(){
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                0);
+    }
+
+    private static boolean hasAudioAndRecordingPermissions(Context context) {
+        boolean hasRecordPermissions = ContextCompat.checkSelfPermission(context,
+                Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        boolean hasExternalStoragePerm = ContextCompat.checkSelfPermission(context,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        return hasRecordPermissions && hasExternalStoragePerm;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        if (!hasAudioAndRecordingPermissions(ViroActivityAR.this)) {
+            Toast toast = Toast.makeText(ViroActivityAR.this, "User denied permissions", Toast.LENGTH_LONG);
+            toast.show();
         }
     }
 
