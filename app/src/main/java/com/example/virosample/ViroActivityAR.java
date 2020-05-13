@@ -29,6 +29,8 @@ import com.viro.core.Node;
 
 import com.viro.core.Object3D;
 import com.viro.core.OmniLight;
+import com.viro.core.ParticleEmitter;
+import com.viro.core.Quad;
 import com.viro.core.Spotlight;
 import com.viro.core.Surface;
 import com.viro.core.Texture;
@@ -50,6 +52,8 @@ public class ViroActivityAR extends Activity {
     private ARImageTarget mImageTarget;
     private Node mGebNode;
     private Object3D mGebModel;
+    private ParticleEmitter mEmitter;
+    private Node mEmitterNode;
     private boolean isRecording = false;
 
     @Override
@@ -84,6 +88,12 @@ public class ViroActivityAR extends Activity {
         mGebNode = loadGebNode();
         mGebNode.addChildNode(initLightingNode());
         mARScene.getRootNode().addChildNode(mGebNode);
+
+        mEmitterNode = new Node();
+        mEmitterNode.setVisible(false);
+        mEmitter = loadEmitter();
+        mEmitterNode.setParticleEmitter(mEmitter);
+        mARScene.getRootNode().addChildNode(mEmitterNode);
 
         mViroView.setScene(mARScene);
         trackImageNodeTargets();
@@ -122,6 +132,13 @@ public class ViroActivityAR extends Activity {
                 mGebNode.setPosition(arAnchor.getPosition());
                 mGebNode.setRotation(arAnchor.getRotation());
                 mGebModel.setVisible(true);
+
+                mEmitterNode.setPosition(arAnchor.getPosition());
+                mEmitterNode.setRotation(arAnchor.getRotation());
+                mEmitterNode.setVisible(true);
+
+                // Start the emitter
+                mEmitter.run();
             }
 
             @Override
@@ -153,7 +170,7 @@ public class ViroActivityAR extends Activity {
             public void onObject3DLoaded(Object3D object, Object3D.Type type) {
                 Log.i(TAG, "Successfully loaded the model!");
                 // When the model is loaded, set the texture associated with this OBJ.
-                Texture objectTexture = new Texture(wood, Texture.Format.RGBA8, false, false);
+                Texture objectTexture = new Texture(wood, Texture.Format.RGBA8, true, false);
                 Material material = new Material();
                 material.setLightingModel(Material.LightingModel.PHYSICALLY_BASED);
                 material.setMetalness(0.25f);
@@ -173,7 +190,8 @@ public class ViroActivityAR extends Activity {
                     requestPermissions();
                     return;
                 }
-                //toggleRecording();
+                toggleRecording();
+
                 AnimationTransaction.begin();
                 AnimationTransaction.setAnimationDuration(2000);
                 AnimationTransaction.setTimingFunction(AnimationTimingFunction.EaseInEaseOut);
@@ -189,6 +207,36 @@ public class ViroActivityAR extends Activity {
         });
 
         return node;
+    }
+
+    private ParticleEmitter loadEmitter() {
+        Node node = new Node();
+
+        final Bitmap steam = bitmapFromAsset("steam.png");
+        Texture objectTexture = new Texture(steam, Texture.Format.RGBA8, true, true);
+        Material steamMaterial = new Material();
+        steamMaterial.setDiffuseTexture(objectTexture);
+
+        Quad particle = new Quad(0.01f, 0.01f);
+        particle.setMaterials(Arrays.asList(steamMaterial));
+
+        ParticleEmitter emitter = new ParticleEmitter(mViroView.getViroContext(), particle);
+        emitter.setLoop(true);
+        emitter.setDelay(0);
+        emitter.setDuration(5000);
+        emitter.setFixedToEmitter(true);
+        emitter.setEmissionRatePerSecond(400,800);
+        emitter.setMaxParticles(5000);
+        emitter.setParticleLifetime(500, 750);
+        emitter.setSpawnVolume(new ParticleEmitter.SpawnVolumeBox(0.1f, 0.001f, 0.1f), true);
+        emitter.setVelocityModifier(new ParticleEmitter.ParticleModifierVector(new Vector(0f,0f,0f), new Vector(0f,0f,0f)));
+        emitter.setAccelerationModifier(new ParticleEmitter.ParticleModifierVector(new Vector(0f,0.1f,0f), new Vector(0f,2.1f,0f)));
+        ParticleEmitter.ParticleModifierFloat particleRot = new ParticleEmitter.ParticleModifierFloat(0f, 3.1415f);
+        particleRot.setFactor(ParticleEmitter.Factor.DISTANCE);
+        particleRot.addInterval(2f, 6.2831f);
+        emitter.setRotationModifier(particleRot);
+
+        return emitter;
     }
 
     private void toggleRecording() {
